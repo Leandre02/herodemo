@@ -3,37 +3,42 @@ using UnityEngine;
 /// <summary>
 /// Gere le comportement d'un personnage en attente
 /// </summary>
-public class AttentePersonnage : EtatPersonnage, IntentionAttaque
+public class AttentePersonnage : EtatPersonnage
 {
-    bool veutAttaquer; // Indique si le personnage veut attaquer
 
     public override void EntrerEtat(Personnage personnage)
     {
         base.EntrerEtat(personnage); // Appel de la méthode de la classe parente
-        Debug.Log("Personnage en attente...");
-        veutAttaquer = false; // Réinitialiser l'état d'attaque à l'entrée dans l'état
+        var anim = personnage.GetComponent<Animator>(); // Charge l'animator
+        personnage.ArreterMarche();
+       
     }
 
     public override EtatPersonnage ExecuterEtat(Personnage personnage)
     {
-        // Vérifier si le personnage veut attaquer 
-        if (Input.GetButtonDown("Attaquer"))
+        // Si le joueur est au sol, a demandé un saut (via une entrée de mouvement verticale positive), et n'est pas déjà en train de sauter
+        if (personnage.Controleur.isGrounded && personnage.EntreeMouvement.y > 0.01f && !personnage.SautEnCours)
         {
-            veutAttaquer = true;
+            return new SautPersonnage();
         }
-        if (veutAttaquer)
+
+
+        // Si le joueur appuie sur la touche de mouvement alors instantie un nouveau mouvement de personnage
+        if (personnage.EntreeMouvement.sqrMagnitude > 0.01f)
         {
-            return new AttaquePersonnage(); // Passe à l'état d'attaque si le personnage veut attaquer
+            return new MouvementPersonnage();
         }
-        // Rester dans l'état d'attente tant que le personnage ne veut pas attaquer
-        else
+        if (personnage.AttaqueEnCours)
         {
-            return this;
+            return new AttaquePersonnage();
         }
+        return this;
+       
     }
 
-    public void OnIntentAttaquer()
+    public override void SortirEtat(Personnage personnage)
     {
-       veutAttaquer = true; // Le personnage veut attaquer
+        base.SortirEtat(personnage);
+        personnage.DemarrerMarche();
     }
 }

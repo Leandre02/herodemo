@@ -3,30 +3,39 @@ using UnityEngine;
 /// <summary>
 /// Gere le mouvement du personnage.
 /// </summary>
-public class MouvementPersonnage : EtatPersonnage, IntentionAttaque
+public class MouvementPersonnage : EtatPersonnage
 {
-    bool veutAttaquer; // Indique si le personnage veut attaquer
-    public void OnIntentAttaquer()
-    {
-        veutAttaquer = true; // Le personnage veut attaquer
-    }
+  
     public override void EntrerEtat(Personnage personnage)
     {
         base.EntrerEtat(personnage); // Appel de la méthode de la classe parente
-        Debug.Log("Personnage en mouvement...");
+        var anim = personnage.GetComponent<Animator>(); // Charge l'animator
+        personnage.DemarrerMarche();
     }
 
     public override EtatPersonnage ExecuterEtat(Personnage personnage)
     {
-        // Vérifier si le personnage veut attaquer 
-        if (veutAttaquer)
+        // Si le joueur est au sol, a demandé un saut (via une entrée de mouvement verticale positive), et n'est pas déjà en train de sauter
+        if (personnage.Controleur.isGrounded && personnage.EntreeMouvement.y > 0.01f && !personnage.SautEnCours)
         {
-            return new AttaquePersonnage(); // Passe à l'état d'attaque si le personnage veut attaquer
+            return new SautPersonnage();
         }
-        // Rester dans l'état de mouvement tant que le personnage ne veut pas attaquer
-        else
+
+        // Si le joueur n'appuie plus sur le bouton de mouvement alors retour en etat d attente
+        if (personnage.EntreeMouvement.sqrMagnitude <= 0.01f)
         {
-            return this;
+            return new AttentePersonnage();
         }
+        if (personnage.AttaqueEnCours)
+        {
+            return new AttaquePersonnage();
+        }
+        return this;
+    }
+
+    public override void SortirEtat(Personnage personnage)
+    {
+        base.SortirEtat(personnage);
+        personnage.ArreterMarche();
     }
 }

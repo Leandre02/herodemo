@@ -2,6 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Gere le comportement d'un monstre
+/// Maquette de base de tous mes états
 /// </summary>
 public abstract class EtatMonstre
 {
@@ -11,6 +12,7 @@ public abstract class EtatMonstre
     /// <param name="monstre">Le monstre dont on gere le comportement</param>
     public virtual void EntrerEtat(Zombie monstre)
     {
+
         Debug.Log($"Monstre entre dans l'etat {this.GetType().Name}");
     }
 

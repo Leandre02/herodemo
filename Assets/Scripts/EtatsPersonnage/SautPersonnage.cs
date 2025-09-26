@@ -1,11 +1,10 @@
+using Unity.VisualScripting;
 using UnityEngine;
 
-/// <summary>
-/// Gere le comportement d'un personnage en attaque
-/// </summary>
-public class AttaquePersonnage : EtatPersonnage
+public class SautPersonnage : EtatPersonnage
 {
-    float timer; // Timer pour gérer la durée de l'attaque
+
+    float timer; // Timer pour gerer la durée du saut
 
     public override void EntrerEtat(Personnage personnage)
     {
@@ -13,25 +12,31 @@ public class AttaquePersonnage : EtatPersonnage
         timer = 0f; // Réinitialiser le timer à l'entrée dans l'état
         var anim = personnage.GetComponent<Animator>(); // Charge l'animator
         personnage.ArreterMarche(); // Arrete l'animation de marche pour pas melanger l'animator
-        personnage.DemarrerAttaque(); // Le personnage commence a attaquer et la requete est envoyé a l'UI qui la consomme
-        
+        personnage.DemarrerSaut(); 
+
     }
 
 
     public override EtatPersonnage ExecuterEtat(Personnage personnage)
     {
         timer += Time.deltaTime; // Incrémenter le timer avec le temps écoulé depuis la dernière frame
-        if (timer >= personnage.TempsAttaque)
+        if (timer >= personnage.TempsSaut && personnage.Controleur.isGrounded)
         {
-            // Si la durée de l'attaque est écoulée, retourner à l'état d'attente
-            return new AttentePersonnage();
+            if (personnage.EntreeMouvement.sqrMagnitude > 0.01f)
+            {
+                return new MouvementPersonnage();
+            }
+            else
+            {
+                return new AttentePersonnage();
+            }
         }
         else
         {
-            // Sinon, rester dans l'état d'attaque
+            // Sinon, rester dans l'état de saut
             return this;
         }
-            
+
     }
 
     public override void SortirEtat(Personnage personnage)
@@ -39,7 +44,8 @@ public class AttaquePersonnage : EtatPersonnage
         base.SortirEtat(personnage);
         // Arrêter l'animation d'attaque
         var anim = personnage.GetComponent<Animator>();
-        personnage.FinirAttaque();
-      
+        personnage.ArreterSaut();
+        
+
     }
 }

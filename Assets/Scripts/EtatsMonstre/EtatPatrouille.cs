@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 
 
 /// <summary>
@@ -6,6 +7,22 @@ using UnityEngine;
 /// </summary>
 public class EtatPatrouille : EtatMonstre
 {
+    // Le zombie entre dans l'état marche
+    public override void EntrerEtat(Zombie monstre)
+    {
+        base.EntrerEtat(monstre);
+
+        // Redemarre l'agent 
+        var agent = monstre.GetComponent<NavMeshAgent>();
+        if (agent)
+        {
+            agent.isStopped = false;
+        }
+        monstre.DemarrerMarche();
+    }
+
+
+    // Le zombie execute sa patrouille et si le character du controleur se trouve a proximité le poursuit direct
     public override EtatMonstre ExecuterEtat(Zombie monstre)
     {
         //Destination atteinte
@@ -23,5 +40,12 @@ public class EtatPatrouille : EtatMonstre
 
         // Continuer la patrouille
         return this;
+    }
+
+    // le zombie sort de l'état marche
+    public override void SortirEtat(Zombie monstre)
+    {
+        base.SortirEtat(monstre);
+        monstre.ArreterMarche();
     }
 }

@@ -1,114 +1,148 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-/// <summary>
-/// Gere le comportement d'un zombie via des etats
-/// </summary>
 
-[RequireComponent(typeof(NavMeshAgent))]
+/// <summary>
+/// Ma classe zombie qui gere les mouvements de mon personnage zombie
+/// Assigne un etat --> cet etat demande la designation de la cible au controleur
+/// La vitesse du deplacement et l'acceleration sont decidés par le NavMesh agent
+/// </summary>
+[RequireComponent(typeof(NavMeshAgent)), RequireComponent(typeof(Animator))]
 public class Zombie : MonoBehaviour, FrappableParArme
 {
-    private NavMeshAgent agent;          // le composant de navigation
-    public Vector3 Destination { get; private set; } // La destination actuelle du zombie
+    private NavMeshAgent agent; // L'IA responsable des deplacements intelligents de mon personnage
+    private Animator anim; // La propriete de l'animation assigné a mon zombie
+
+    private static readonly int HashMarcher = Animator.StringToHash("Marche"); // Mon animation de marche
+    private static readonly int HashAttaquer = Animator.StringToHash("Attaque"); // Mon animation d'attaque
+    private static readonly int HashMourir = Animator.StringToHash("Mourir"); // Mon animation de mort
+
+
+
+    [Header("Attaque")]
+    [SerializeField] private Arme arme; // La propriete de l'arme de mon zombie
+    [SerializeField, Tooltip("Temps entre 2 coups (s)")] private float tempsAttaque = 0.8f; // Le temps d'attente entre chaque coups
+
+    // Accesseur de mon temps d'attaque pour mon EtatAttaque
+    public float TempsAttaque => tempsAttaque;
+
+    private bool attaqueEnCours; // Un trigger pour determiner si une attaque est en cours
+
+    public Vector3 Destination { get; private set; } // Le vecteur qui definit la destination des mouvements de mon personnage
+
+    [field: SerializeField] public float RayonPoursuite { get; private set; } = 10f; // le rayon de la poursuite
+    [field: SerializeField] public float RayonAttaque { get; private set; } = 2f; // le rayon de l'attaque
+
+    [SerializeField] private float rayonPatrouille = 12f; // le rayon de la patrouille
+    private Vector3 positionInitiale; // Le vecteur de position initial de mon personnage
+
+    private EtatMonstre etatPrecedent; // L'etat precedent de mon personnage 
+    private EtatMonstre prochainEtat; // Le prochain etat de mon zombie
+
+    // Ajout du champ booléen pour indiquer si le zombie est mort
+    private bool estMort = false;
+    public bool EstMort => estMort;
 
     /// <summary>
-    /// les etats possibles du monstre
+    /// Initialise le component NavMesh pour initier la position d'origine de mon personnage et determiner sa destination
     /// </summary>
-
-    [field: SerializeField, Tooltip("Le rayon dans lequel le monstre commence à poursuivre le personnage.")]
-    public float RayonPoursuite { get; private set; }
-
-    [field: SerializeField, Tooltip("Le rayon dans lequel le monstre commence à attaque le personnage.")]
-    public float RayonAttaque { get; private set; }
-
-    [SerializeField, Tooltip("Rayon dans lequel le monstre patrouille")]
-    private float rayonPatrouille;
-
-    [SerializeField, Tooltip("Position initiale du monstre")]
-    private Vector3 positionInitiale;
-
-    #region Gestion de l'état du monstre
-    /// <summary>
-    /// État actuel du monstre
-    /// </summary>
-    private EtatMonstre etatPrecedent;
-
-    private EtatMonstre prochainEtat;
-    #endregion
-
     private void Awake()
     {
-        // Récupère une référence sur le component
-        agent = GetComponent<NavMeshAgent>();
+        agent = GetComponent<NavMeshAgent>(); // Pre-charge l'IA de mon zombie
+        anim = GetComponent<Animator>(); // Pre-charge les animations correspondantes
 
-        // On commence dans l'état de patrouille
+        positionInitiale = transform.position;     //  Le point de depart de mon zombie
+        ChoisirDestination();                      // La destination de mon zombie
+
+        agent.stoppingDistance = Mathf.Max(0.1f, RayonAttaque * 0.9f);
+
         etatPrecedent = null;
-        prochainEtat = new EtatPatrouille();
+        prochainEtat = new EtatPatrouille(); // On initialise à l'etat patrouille par defaut
 
-        // TODO : À DÉPLACER
-        ChoisirDestination();
-    }
 
-    private void Start()
-    {
-        positionInitiale = transform.position;
-    }
+        // Branchement au changement d'etat vers Mourir
+        var vie = GetComponent<Vie>();
+        if (vie != null) vie.OnMort += () => { prochainEtat = new EtatMort(); };
 
-    private void Update()
-    {
-        // Prochain état représente l'état à exécuter
-        if (etatPrecedent != prochainEtat)
-        {
-            prochainEtat.EntrerEtat(this);
-        }
-        // On n'a plus besoin de cette valeur, on fait donc la mise à jour
-        etatPrecedent = prochainEtat;
-        prochainEtat = prochainEtat.ExecuterEtat(this);      // Met à jour le prochain état à exécuter. 
-                                                             // À partir de ce point, l'état de la frame est accessible dans etatPrecedent (voir ligne au-dessus).
-
-        if (etatPrecedent != prochainEtat)
-        {
-            etatPrecedent.SortirEtat(this);
-        }
     }
 
     /// <summary>
-    /// Assigne une nouvelle destination au hasard au monstre
+    /// La methode qui met a jour l'etat de mon zombie a chaque frame
     /// </summary>
+    private void Update()
+    {
+
+        // determine si le zombie a atteint sa destination en etat patrouille si oui choisi une nouvelle destination
+        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance && prochainEtat is EtatPatrouille)
+            ChoisirDestination();
+
+
+        // 1) si changement -> on sort de l’ancien
+        if (etatPrecedent != null && etatPrecedent != prochainEtat)
+            etatPrecedent.SortirEtat(this);
+
+        // 2) si changement -> on entre dans le nouveau
+        if (etatPrecedent != prochainEtat)
+            prochainEtat.EntrerEtat(this);
+
+        // 3) on exécute l’état courant
+        etatPrecedent = prochainEtat;
+        prochainEtat = prochainEtat.ExecuterEtat(this);
+
+    }
+
+    // ===== Hooks de mes differents Etats marche =====
+    public void DemarrerMarche() => anim?.SetBool(HashMarcher, true);
+    public void ArreterMarche() => anim?.SetBool(HashMarcher, false);
+
+
+
+    // Methode pour mon état Attaque
+    public void DemarrerAttaque()
+    {
+        if (attaqueEnCours || arme == null) return;
+
+        attaqueEnCours = true;
+        anim?.SetTrigger(HashAttaquer);
+        arme.CommencerAttaque();
+        Invoke(nameof(FinirAttaque), tempsAttaque);
+    }
+
+    public void FinirAttaque()
+    {
+        attaqueEnCours = false;
+    }
+
     public void ChoisirDestination()
     {
-        /*Vector3 pointAleatoire = new Vector3(Random.value * 50.0f - 25.0f,
-            transform.position.y,
-            Random.value * 50.0f - 25.0f);*/
-        Vector3 pointAleatoire = positionInitiale + Random.insideUnitSphere * rayonPatrouille;
-
+        // point aléatoire sur un disque au sol autour de la positionInitiale
+        Vector2 disque = Random.insideUnitCircle * rayonPatrouille;
+        Vector3 pointAleatoire = positionInitiale + new Vector3(disque.x, 0f, disque.y);
         AssignerDestination(pointAleatoire);
     }
 
-    /// <summary>
-    /// Assigne une destination au monstre
-    /// </summary>
-    /// <param name="destination">La destination à assigner au monstre</param>
     public void AssignerDestination(Vector3 destination)
     {
-        // Permet d'obtenir un point sur le nav mesh
-        if (NavMesh.SamplePosition(destination, out NavMeshHit pointDeterminee, 100f, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(destination, out NavMeshHit hit, 100f, NavMesh.AllAreas))
         {
-            Destination = pointDeterminee.position;
+            Destination = hit.position;
+            agent.SetDestination(Destination);
         }
-
-        agent.destination = Destination;
     }
 
-    /// <summary>
-    /// Lorsqu'un monstre est frappé, il reçoit des dégâts.
-    /// </summary>
-    /// <param name="arme">L'arme qui a frappé le monstre.</param>
-    public void RecevoirFrappe(Arme arme)
+    public void RecevoirFrappe(Arme arme) => GetComponent<Vie>()?.PrendreDegats(arme.Degat);
+
+    // Méthode à ajouter dans la classe Zombie
+    public void Mourir()
     {
-        GetComponent<Vie>()?.PrendreDegats(arme.Degat);
+        if (estMort) return; // Empêche d'appeler plusieurs fois
+
+        estMort = true;
+
+        // Déclenche l'animation de mort si l'Animator est présent
+        if (anim == null)
+            anim = GetComponent<Animator>();
+        if (anim != null)
+            anim.SetTrigger(HashMourir);
     }
-
 }
-
-

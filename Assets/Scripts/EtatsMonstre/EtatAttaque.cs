@@ -1,69 +1,84 @@
 ﻿using UnityEngine;
 using UnityEngine.AI;
 
+/// <summary>
+/// État de l'attaque de mon zombie
+/// </summary>
 public class EtatAttaque : EtatMonstre
 {
-    private float cooldown = 1.0f;  // 1 coup/seconde (à ajuster)
-    private float timer;
+    public float timerAttaque; // Le timer entre chaque attaque
 
     public override void EntrerEtat(Zombie monstre)
     {
-        timer = 0f;
-
-        // Optionnel: stopper l'agent pour frapper sur place
+        base.EntrerEtat(monstre);
+        // Arrêter le déplacement de l'IA
         var agent = monstre.GetComponent<NavMeshAgent>();
-        if (agent) agent.isStopped = true;
-
-        // TODO si tu as un Animator :
-        // monstre.GetComponent<Animator>()?.SetTrigger("Attaquer");
+        if (agent != null)
+        {
+            agent.isStopped = true;
+        }
+        // Démarrer l'animation d'attaque
+        var anim = monstre.GetComponent<Animator>();
+        monstre.ArreterMarche(); // Arrete l'animation de marche pour pas melanger l'animator
+        timerAttaque = 0f; 
+        monstre.DemarrerAttaque();
+        
     }
 
+    /// <summary>
+    /// Methode d execution de l attaque de mon zombie
+    /// Mesure la distance par rapport au joueur et non a la destination pour eviter des alternances trop rapide entre poursuite et attaque
+    /// </summary>
+    /// <param name="monstre"></param>
+    /// <returns></returns>
     public override EtatMonstre ExecuterEtat(Zombie monstre)
     {
-        var perso = ControleurJeu.Instance?.Personnage?.transform;
-        if (!perso) return this; // sécurité
+        // Position actuelle du joueur
+        var posCible = ControleurJeu.Instance.Personnage.transform.position;
 
-        // Si la cible est sortie de portée d'attaque -> retour en poursuite
-        float d = Vector3.Distance(perso.position, monstre.transform.position);
-        if (d > monstre.RayonAttaque)
-        {
-            var agent = monstre.GetComponent<NavMeshAgent>();
-            if (agent) agent.isStopped = false;
-            return new EtatPoursuite();
-        }
-
-        // Regarder la cible (rotation douce)
-        Vector3 dir = perso.position - monstre.transform.position;
+        // Garder le zombie orienté vers la cible (à plat sur le plan XZ)
+        Vector3 dir = (posCible - monstre.transform.position);
         dir.y = 0f;
         if (dir.sqrMagnitude > 0.0001f)
-        {
-            monstre.transform.rotation = Quaternion.RotateTowards(
+            monstre.transform.rotation = Quaternion.Slerp(
                 monstre.transform.rotation,
                 Quaternion.LookRotation(dir),
-                360f * Time.deltaTime
+                10f * Time.deltaTime
             );
-        }
 
-        // Cooldown d'attaque
-        timer += Time.deltaTime;
-        if (timer >= cooldown)
+        // Si la cible s’éloigne, on repasse en poursuite
+        float distance = Vector3.Distance(monstre.transform.position, posCible);
+        if (distance > monstre.RayonAttaque * 1.05f)
+            return new EtatPoursuite();
+
+        // Timer d’attaque
+        timerAttaque += Time.deltaTime;
+        if (timerAttaque >= monstre.TempsAttaque)
         {
-            Debug.Log(" Zombie attaque !");
-            timer = 0f;
-
-            // TODO: appliquer des dégâts réels (animation event, hitbox, raycast, etc.)
-            // Exemple si ton Personnage implémente une interface de PV :
-            // perso.GetComponent<Vie>()?.PrendreDegats(valeur);
+            monstre.DemarrerAttaque();
+            timerAttaque = 0f;
         }
-
-        // On reste en Attaque tant que la cible est à portée
         return this;
     }
 
+
     public override void SortirEtat(Zombie monstre)
     {
-        // Relancer l'agent quand on quitte l'état
+        base.SortirEtat(monstre);
+        // Arrêter l'animation d'attaque
+        var anim = monstre.GetComponent<Animator>();
+        if (anim != null)
+        {
+            anim.ResetTrigger("Attaque");
+        }
+        // Arrêter l'attaque
+        monstre.FinirAttaque();
+
+        // Redemarre l'agent 
         var agent = monstre.GetComponent<NavMeshAgent>();
-        if (agent) agent.isStopped = false;
+        if (agent)
+        {
+            agent.isStopped = false;
+        }
     }
 }

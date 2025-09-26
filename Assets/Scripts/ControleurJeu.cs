@@ -21,5 +21,4 @@ public class ControleurJeu : MonoBehaviour
         else Destroy(gameObject);
     }
 
-
 }

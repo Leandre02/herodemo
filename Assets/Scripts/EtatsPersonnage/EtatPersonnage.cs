@@ -6,8 +6,6 @@ using UnityEngine.InputSystem;
 /// </summary>
 public abstract class EtatPersonnage
 {
-
-///
     /// <summary>
     /// Actions a accomplir lorsqu'un personnage entre dans l'etat
     /// </summary>
@@ -23,6 +21,8 @@ public abstract class EtatPersonnage
     /// <param name="personnage">Le personnage dont on gere le comportement</param>
     /// <returns>L'etat a executer a la prochaine frame.</returns>
     public abstract EtatPersonnage ExecuterEtat(Personnage personnage);
+
+
     /// <summary>
     /// Actions a accomplir lorsqu'un personnage sort de l'etat
     /// </summary>
